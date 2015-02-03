@@ -1,7 +1,7 @@
 var app = require('express')()
     , server = require('http').createServer(app)
     , io = require('socket.io').listen(server)
-    , clientToken = require('./config.js').clientToken
+    , config = require('./config')
     , analytics = require('nodealytics');
 
 var databaseUrl = "gisto",
@@ -23,7 +23,7 @@ io.sockets.on('connection', function (client) {
 
     client.on('registerClient', function (data) {
         console.log(data);
-        if (!data.hasOwnProperty('token') || data.token !== clientToken) {
+        if (!data.hasOwnProperty('token') || data.token !== config.clientToken) {
             console.log('failed authentication');
             client.disconnect();
             return;
@@ -31,10 +31,14 @@ io.sockets.on('connection', function (client) {
 
         console.log('registering client: ' + data.user);
         this.user = data.user;
+        this.endpoint = data.endpoint || config.clientId;
         clients.push(client);
 
         // check for existing notifications
-        db.notifications.find({recipient: data.user}, function (err, notifications) {
+        db.notifications.find({
+            recipient: data.user,
+            endpoint: client.endpoint
+        }, function (err, notifications) {
             if (err || !notifications) {
                 console.log('no pending notifications');
             } else {
@@ -66,13 +70,19 @@ io.sockets.on('connection', function (client) {
 
     client.on('notificationRead', function (item) {
 
-        console.log('recieved notification');
+        console.log('notification read');
 
         // remove notification from database
-        db.notifications.remove({recipient: client.user, gistId: item.gistId}, false);
+        db.notifications.remove({
+            recipient: client.user,
+            endpoint: client.endpoint,
+            gistId: item.gistId
+        }, false);
+
+        console.log({recipient: client.user,endpoint: client.endpoint,gistId: item.gistId});
 
         // send all clients that the notification has been read.
-        var recipient = getAllClientSockets(clients, client.user);
+        var recipient = getAllClientSockets(clients, client.user, client.endpoint);
 
         if (recipient && recipient.length > 0) {
 
@@ -86,8 +96,10 @@ io.sockets.on('connection', function (client) {
 
     client.on('sendNotification', function (data) {
 
-        var recipient = getAllClientSockets(clients,data.recipient);
+        var recipient = getAllClientSockets(clients,data.recipient,  client.endpoint);
         console.log('clients', recipient);
+
+        data.endpoint = client.endpoint;
 
         // add the sender
         data.type = data.type || 'share';
@@ -115,8 +127,8 @@ io.sockets.on('connection', function (client) {
     });
 });
 
-function getAllClientSockets(clients, username) {
+function getAllClientSockets(clients, username, endpoint) {
     return clients.filter(function (item) {
-        return item.user === username;
+        return item.user === username && item.endpoint === endpoint;
     });
 }
