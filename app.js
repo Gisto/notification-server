@@ -19,7 +19,7 @@ io.sockets.on('connection', function(client) {
 
     client.on('registerClient', function(data) {
         console.log(data);
-        if (!data.hasOwnProperty('token') || data.token !== config.clientToken) {
+        if (!data.hasOwnProperty('endpoint') || data.endpoint !== config.clientId) {
             console.log('failed authentication');
             client.disconnect();
             return;
@@ -27,7 +27,7 @@ io.sockets.on('connection', function(client) {
 
         console.log('registering client: ' + data.user);
         this.user = data.user;
-        // assign the endpoint or the default endpoint (hash of api.github.com)
+        // assign the endpoint or the default endpoint (github.com)
         this.endpoint = data.endpoint || config.clientId;
         clients.push(client);
 
